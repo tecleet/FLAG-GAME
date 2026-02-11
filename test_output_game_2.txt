@@ -1,0 +1,17 @@
+Testing Game Manager...
+Starting round 1: Pitcairn (PN)
+State update: PLAYING, Countdown: 10, Reveal: 0
+State update: PLAYING, Countdown: 9, Reveal: 0
+State update: PLAYING, Countdown: 8, Reveal: 1
+State update: PLAYING, Countdown: 7, Reveal: 1
+State update: PLAYING, Countdown: 6, Reveal: 2
+State update: PLAYING, Countdown: 5, Reveal: 2
+State update: PLAYING, Countdown: 4, Reveal: 3
+State update: PLAYING, Countdown: 3, Reveal: 3
+State update: PLAYING, Countdown: 2, Reveal: 4
+State update: PLAYING, Countdown: 1, Reveal: 4
+State update: PLAYING, Countdown: 0, Reveal: 5
+State update: ROUND_OVER, Countdown: 0, Reveal: 5
+Round Over!
+Winners: []
+Scoreboard: []
