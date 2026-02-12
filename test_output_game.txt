@@ -1,5 +1,0 @@
-Testing Game Manager...
-Starting round 1: Armenia (AM)
-Round Over!
-Winners: []
-Scoreboard: []
