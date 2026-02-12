@@ -1,0 +1,16 @@
+{
+  "name": "flag-reveal-2077",
+  "version": "1.0.0",
+  "description": "Real-time YouTube Flag Guessing Game",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "iso-3166-1": "^2.1.1",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1",
+    "youtube-chat": "^2.2.0"
+  }
+}
