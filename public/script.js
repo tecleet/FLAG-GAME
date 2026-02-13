@@ -23,6 +23,8 @@ const durationSlider = document.getElementById('duration-slider');
 const durationVal = document.getElementById('duration-val');
 const blurSlider = document.getElementById('blur-slider');
 const blurVal = document.getElementById('blur-val');
+const latencySlider = document.getElementById('latency-slider');
+const latencyVal = document.getElementById('latency-val');
 
 // Audio
 const synth = window.speechSynthesis;
@@ -67,12 +69,17 @@ blurSlider.addEventListener('input', (e) => {
     blurVal.textContent = e.target.value;
 });
 
+latencySlider.addEventListener('input', (e) => {
+    latencyVal.textContent = `${e.target.value}s`;
+});
+
 saveSettingsBtn.addEventListener('click', () => {
     const newSettings = {
         videoId: videoIdInput.value.trim(),
         mockMode: mockModeCheck.checked,
         duration: durationSlider.value,
-        blurIntensity: blurSlider.value
+        blurIntensity: blurSlider.value,
+        streamLatency: latencySlider.value
     };
 
     socket.emit('updateSettings', newSettings);
@@ -208,4 +215,6 @@ function syncSettings(settings) {
     durationVal.textContent = `${settings.duration}s`;
     blurSlider.value = settings.blurIntensity;
     blurVal.textContent = settings.blurIntensity;
+    latencySlider.value = settings.streamLatency;
+    latencyVal.textContent = `${settings.streamLatency}s`;
 }

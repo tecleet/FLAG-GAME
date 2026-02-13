@@ -1,16 +1,31 @@
 const EventEmitter = require('events');
-const { getRandomCountry, extractFirstFlag } = require('./flagService');
+const { getRandomCountry, extractFirstFlag, textToIso } = require('./flagService');
 
 class GameManager extends EventEmitter {
     constructor() {
         super();
-        this.settings = { duration: 10, blurIntensity: 5, mockMode: true, videoId: '' };
-        this.state = {
-            status: 'WAITING', currentCountry: null, revealLevel: 0, countdown: 10,
-            winners: [], scoreboard: {}, settings: this.settings
+        this.settings = {
+            duration: 10,
+            blurIntensity: 5,
+            mockMode: true,
+            videoId: '',
+            streamLatency: 25
         };
+
+        this.state = {
+            status: 'WAITING',
+            currentCountry: null,
+            revealLevel: 0,
+            countdown: 10,
+            winners: [],
+            scoreboard: {},
+            settings: this.settings,
+            activeGuessing: false
+        };
+
         this.roundCount = 0;
-        this.roundDuration = this.settings.duration;
+        this.visualDuration = this.settings.duration;
+        this.totalRoundDuration = this.visualDuration + this.settings.streamLatency;
         this.blurInterval = 2;
         this.timers = {};
     }
@@ -20,11 +35,15 @@ class GameManager extends EventEmitter {
     updateSettings(newSettings) {
         if (newSettings.duration) {
             this.settings.duration = parseInt(newSettings.duration);
-            this.roundDuration = this.settings.duration;
         }
         if (newSettings.blurIntensity) this.settings.blurIntensity = parseInt(newSettings.blurIntensity);
         if (newSettings.mockMode !== undefined) this.settings.mockMode = newSettings.mockMode;
         if (newSettings.videoId !== undefined) this.settings.videoId = newSettings.videoId;
+        if (newSettings.streamLatency !== undefined) this.settings.streamLatency = parseInt(newSettings.streamLatency);
+
+        // Recalculate durations immediately so tests/logic see the new values
+        this.visualDuration = this.settings.duration;
+        this.totalRoundDuration = this.visualDuration + this.settings.streamLatency;
 
         this.state.settings = this.settings;
         this.emitStateUpdate();
@@ -37,40 +56,72 @@ class GameManager extends EventEmitter {
         this.state.currentCountry = country;
         this.state.status = 'PLAYING';
         this.state.revealLevel = 0;
-        this.state.countdown = this.settings.duration;
-        this.roundDuration = this.settings.duration;
-        this.blurInterval = Math.max(1, Math.floor(this.roundDuration / 5));
+
+        // Duration logic
+        this.visualDuration = this.settings.duration;
+        this.totalRoundDuration = this.visualDuration + this.settings.streamLatency;
+
+        // Countdown is purely visual (for the HUD)
+        this.state.countdown = this.visualDuration;
+
+        this.blurInterval = Math.max(1, Math.floor(this.visualDuration / 5));
+
         this.state.winners = [];
+        this.state.activeGuessing = true;
         this.roundCount++;
 
-        console.log(`Starting round ${this.roundCount}: ${country.name} (${country.code})`);
+        console.log(`Starting round ${this.roundCount}: ${country.name} (${country.code}). Total duration: ${this.totalRoundDuration}s (Visual: ${this.visualDuration}s + Latency: ${this.settings.streamLatency}s)`);
+
         this.emitStateUpdate();
         this.emit('roundStart', country);
 
+        // Round Timer (Total Duration)
+        let elapsedTotal = 0;
+
         this.timers.tick = setInterval(() => {
-            this.state.countdown--;
-            const elapsed = this.roundDuration - this.state.countdown;
-            if (elapsed > 0 && elapsed % this.blurInterval === 0) {
-                 if (this.state.revealLevel < 5) this.state.revealLevel++;
+            elapsedTotal++;
+
+            // Visual Countdown logic
+            if (this.state.countdown > 0) {
+                this.state.countdown--;
+            } else {
+                // Visual countdown ended, but round continues for latency
             }
+
+            // Blur Logic (Only during visual phase)
+            if (elapsedTotal <= this.visualDuration) {
+                if (elapsedTotal % this.blurInterval === 0 && this.state.revealLevel < 5) {
+                    this.state.revealLevel++;
+                }
+            }
+
             this.emitStateUpdate();
-            if (this.state.countdown <= 0) this.endRound();
+
+            // End Condition
+            if (elapsedTotal >= this.totalRoundDuration) {
+                this.endRound();
+            }
         }, 1000);
     }
 
     endRound() {
         this.clearTimers();
         this.state.status = 'ROUND_OVER';
+        this.state.activeGuessing = false;
         this.state.revealLevel = 5;
 
+        // Streak logic
         const winnersUsernames = new Set(this.state.winners.map(w => w.username));
         for (const username in this.state.scoreboard) {
             if (this.state.scoreboard[username].streak > 0 && !winnersUsernames.has(username)) {
                 this.state.scoreboard[username].streak = 0;
             }
         }
+
         this.emitStateUpdate();
         this.emit('roundEnd', { country: this.state.currentCountry, winners: this.state.winners });
+
+        // Wait before next round
         this.timers.nextRound = setTimeout(() => { this.startRound(); }, 5000);
     }
 
@@ -80,10 +131,23 @@ class GameManager extends EventEmitter {
     }
 
     processGuess(username, text) {
-        if (this.state.status !== 'PLAYING') return;
+        if (!this.state.activeGuessing) return;
         if (this.state.winners.find(w => w.username === username)) return;
 
-        const guessedIso = extractFirstFlag(text);
+        // 1. Try Emoji
+        let guessedIso = extractFirstFlag(text);
+
+        // 2. Try Text
+        if (!guessedIso) {
+            guessedIso = textToIso(text);
+        }
+
+        if (guessedIso) {
+            this.handleGuessResult(username, guessedIso);
+        }
+    }
+
+    handleGuessResult(username, guessedIso) {
         if (!guessedIso) return;
 
         if (guessedIso === this.state.currentCountry.code) {
@@ -116,7 +180,9 @@ class GameManager extends EventEmitter {
         return {
             status: this.state.status, currentCountry: this.state.currentCountry,
             revealLevel: this.state.revealLevel, countdown: this.state.countdown,
-            winners: this.state.winners, scoreboard: sortedScoreboard, settings: this.settings
+            winners: this.state.winners, scoreboard: sortedScoreboard, settings: this.settings,
+            visualDuration: this.visualDuration,
+            totalDuration: this.totalRoundDuration
         };
     }
 }
